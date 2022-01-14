@@ -1,3 +1,21 @@
+# Relative Rotation Swing Trading Algorithm
+# Copyright (C) 2022  Shaurya Tathgir
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Owner can be contacted via email: Shaurya [at] Tathgir [dot] com
+
 from typing import List
 
 import matplotlib.pyplot as plt
@@ -46,7 +64,7 @@ def plotRRG(rr: List[RelativeRotation], period: int = 15, padding: int = 0.5) ->
     ax.fill_between([100-dist, 100], [100]*2, [100+dist]*2,
                     facecolor = 'cornflowerblue',
                     alpha = 0.2)
-    
+    fig.patch.set_facecolor('white')
     plt.xlabel('JdK RS Ratio')
     plt.ylabel("JdK RS Momentum")
     plt.title('Sector Relative Rotation')
@@ -69,6 +87,7 @@ def plotPie(tracker: pd.DataFrame) -> None:
         if(i in ['Date', 'Value']): continue
         sizes.append(values[i] / values['Value'])
     fig, ax = plt.subplots(figsize=(10, 10))
+    fig.patch.set_facecolor('white')
     ax.pie(sizes, labels=labels, autopct='%1.1f%%')
     ax.axis('equal')
     plt.savefig(PIE_NAME)
@@ -82,5 +101,6 @@ def plotPortfolio(tracker: pd.DataFrame) -> None:
     """
     plot = tracker.plot(x = 'Date', rot = 90)
     fig = plot.get_figure()
+    fig.patch.set_facecolor('white')
     fig.savefig(PORT_PLOT_NAME)
     return

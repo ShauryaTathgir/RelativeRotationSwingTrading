@@ -1,5 +1,20 @@
-# build backtesting engine
-# fix returns calculation to annualize and be faster
+# Relative Rotation Swing Trading Algorithm
+# Copyright (C) 2022  Shaurya Tathgir
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Owner can be contacted via email: Shaurya [at] Tathgir [dot] com
 
 from dataclasses import dataclass
 
@@ -37,7 +52,7 @@ class Asset:
         years = []
         for i in range(0, len(self.prices), 252):
             try:
-                years.append(self.prices[i:i+252].tolist()) # make this faster
+                years.append(self.prices[i:i+252].tolist())
             except KeyError:
                 years.append(self.prices[i:len(self.prices)].tolist())
         
