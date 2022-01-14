@@ -1,7 +1,7 @@
 # Relative Rotation Swing Trading Algorithm
 ## Theory
 Relative Rotation Graphs, or RRGs, are a concept initially developed by Julius de Kempenaer that plots a sector's relative momentum against its relative strength. Relative strength is fundamentally how well a sector is performing compared to the market, and the relative momentum is based on the percent change of the relative strength. Once these values are calculated they can be plotted on a relative rotation graph as so:
-![Example Relative Rotation Graph](http://rrg.tathgir.com/example-rrg.png) <br>
+![Example Relative Rotation Graph](http://rrg.tathgir.com/example-rrg-new.png) <br>
 
 <span style="font-size:.9em;">*Note*: This graph looks different and has different values compared to relative rotation graphs that can be found on the Bloomberg terminal or [JdK's website stockcharts](stockcharts.com). This is due to proprietary normalization algorithms and different parameters used in smoothing, look back periods, and percent change. This graph noticeably has very straight lines and values that do not range far from 100; however, the quadrant the assets are located in and the general direction that they move do match Bloomberg's calculated values.</span><br><br>
 
