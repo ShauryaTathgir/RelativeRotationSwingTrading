@@ -16,138 +16,20 @@
 
 # Owner can be contacted via email: Shaurya [at] Tathgir [dot] com
 
-from collections import Counter as check
-from datetime import datetime, timedelta
+from datetime import datetime
 from sys import exit
 from time import sleep
 from typing import List, Tuple
 from warnings import filterwarnings
 
-import pandas as pd
 from td.client import TDClient
 
-from aws import s3Download, s3Upload
+from communicate import marketClosed, publish
 from config import *
-from Markowitz import EfficientFrontier
 from helpers import *
+from Markowitz import EfficientFrontier
 
 filterwarnings("ignore", category=RuntimeWarning)
-
-
-class PositionTracker:
-    def __init__(self, TDSession: TDClient) -> None:
-        """Tracks trades and allocations by asset
-
-        Args:
-            TDSession (TDClient): Authenticated API connection object
-        """
-        existing = self._getCSVs()
-        
-        if not existing: self._generateDataFrames()
-        
-        self.TDSession = TDSession
-        return
-
-    def _generateDataFrames(self) -> None:
-        """Creates tracking dataframes if there have been no trades ever
-        """
-        self.tracker = pd.DataFrame(columns=['Date', 'Cash', 'Value'])
-        yesterday = datetime.now() - timedelta(days=1)
-        self.addDay({'Date': yesterday.strftime("%Y/%m/%d"), 'Cash': ACCOUNT_START, 'Value': ACCOUNT_START})
-        self.trades = pd.DataFrame(columns = ['Date', 'Symbol', 'Quantity', 'Value'])
-        return
-    
-    def _getCSVs(self) -> bool:
-        """Downloads tracker and trades csv from s3
-
-        Returns:
-            bool: If files exist in s3
-        """
-        self.tracker = s3Download(TRACKER)
-        self.trades = s3Download(TRADES)
-        
-        return type(None) not in [type(self.tracker), type(self.trades)]
-
-    def getStrategyValue(self) -> float:
-        """Gets current value of the portfolio
-
-        Returns:
-            float: Value in dollars
-        """
-        return self.tracker.iloc[self.tracker.shape[0] - 1, self.tracker.shape[1] - 1]
-    
-    def getPreviousCashBalance(self) -> float:
-        """Gets cash balance from last period
-
-        Returns:
-            float: Cash in dollars
-        """
-        return self.tracker.iloc[self.tracker.shape[0] - 1, 1]
-    
-    def addSymbol(self, symbol: str) -> None:
-        """Adds an asset to the tracker;. Assumed no allocation in past
-
-        Args:
-            symbol (str): Ticker for asset
-        """
-        self.tracker.insert(2, symbol, [0] * self.tracker.shape[0])
-        return
-    
-    def addColumns(self) -> None:
-        """Adds assets in already in storage to allocation tracker
-        """
-        grabber = Data(self.TDSession)
-        symbols = grabber.getTickers()['tickers']
-        
-        newSymbols = [x for x in symbols if x not in self.tracker.columns]
-        
-        for sym in newSymbols:
-            self.addSymbol(sym)
-        
-        return
-    
-    def addDay(self, data: dict) -> None:
-        """Adds new periods allocations to tracker
-
-        Args:
-            data (dict): Allocations
-
-        Raises:
-            ValueError: If given incorrect keys in data dict
-        """
-        if(check(data.keys()) != check(self.tracker.columns)):
-            raise ValueError("Incorrect data keys")
-        
-        self.tracker = self.tracker.append(data, ignore_index=True)
-        return
-    
-    def logTrade(self, data: dict) -> None:
-        """Logs a trade in trades
-
-        Args:
-            data (dict): Trade data
-
-        Raises:
-            ValueError: If given incorrect data
-        """
-        if(check(data.keys()) != check(self.trades.columns)):
-            raise ValueError("Incorrect data keys")
-        
-        self.trades = self.trades.append(data, ignore_index=True)
-        return
-    
-    def saveLogs(self, location: str = '') -> None:
-        """Uploads final files to s3 for storage
-        
-        Args:
-            location (str): Pre-path to file
-        """
-        self.tracker.to_csv(location + TRACKER, index=False)
-        self.trades.to_csv(location + TRADES, index=False)
-        s3Upload(location + TRACKER)
-        s3Upload(location + TRADES)
-        return
-
 
 def authenticateAPI() -> TDClient:
     """Creates an authenticated API connection object
@@ -155,7 +37,8 @@ def authenticateAPI() -> TDClient:
     Returns:
         TDClient: API object
     """
-    TDSession = TDClient(client_id = CONSUMER_KEY, redirect_uri = REDIRECT_URL, credentials_path = CREDENTIALS_PATH)
+    TDSession = TDClient(client_id = CONSUMER_KEY, redirect_uri = REDIRECT_URL,
+                         credentials_path = CREDENTIALS_PATH)
     TDSession.login()
     return TDSession
 
@@ -165,7 +48,9 @@ def checkMarket(TDSession: TDClient) -> None:
     Args:
         TDSession (TDClient): API object
     """
-    if(not TDSession.get_market_hours(markets = ['EQUITY'], date = datetime.today().strftime('%Y-%m-%d'))['equity']['EQ']['isOpen']):
+    open = TDSession.get_market_hours(markets = ['EQUITY'],
+                                      date = datetime.today().strftime('%Y-%m-%d'))['equity']['EQ']['isOpen']
+    if(not open):
         marketClosed()
         exit()
     return
@@ -199,7 +84,10 @@ def optimizeWeights(portfolio: List[Asset], assets: List[Asset]) -> List[Asset]:
         List[Asset]: All assets with weights assigned in parameter
     """
     optimizer = EfficientFrontier(portfolio)
-    optimizer.globalMinimumVarianceWeights()
+    match OPT_METHOD:
+        case 'Sharpe': optimizer.optimizeSharpeRatio()
+        case 'GlobalMinimumVariance': optimizer.globalMinimumVarianceWeights()
+    #   case 'RiskTolerance': optimizer.optimalPortfolioWeights(gamma)
     portAssets = optimizer.assets
 
     excluded = [x for x in assets if x not in portfolio]
@@ -220,7 +108,8 @@ def getCurrentPositions(TDSession: TDClient) -> dict:
     grabber = Data(TDSession)
     tickers = grabber.getTickers()['tickers']
     
-    holdings = TDSession.get_accounts(account = TD_ACCOUNT, fields=['positions'])['securitiesAccount']['positions']
+    holdings = TDSession.get_accounts(account = TD_ACCOUNT,
+                                      fields=['positions'])['securitiesAccount']['positions']
     current = {}
     for position in holdings:
         if(position['instrument']['symbol'] in tickers):
@@ -261,7 +150,7 @@ def placeTrade(TDSession: TDClient, symbol: str, quantity: int) -> float:
     Args:
         TDSession (TDClient): API object
         symbol (str): Ticker for asset
-        quantity (int): Number of shares. Negative if sale
+        quantity (int): Number of shares. Negative if sale. Must be non-zero.
 
     Returns:
         float: Execution price
@@ -271,6 +160,8 @@ def placeTrade(TDSession: TDClient, symbol: str, quantity: int) -> float:
         quantity *= -1
     else:
         instruction = "buy"
+    
+    quantity = int(quantity)
     
     order = {
                 "orderType": "MARKET",
@@ -290,10 +181,13 @@ def placeTrade(TDSession: TDClient, symbol: str, quantity: int) -> float:
             }
     resp = TDSession.place_order(account = TD_ACCOUNT, order = order)
     
-    while TDSession.get_orders(account=TD_ACCOUNT, order_id = resp['order_id'])['remainingQuantity'] != 0:
+    while TDSession.get_orders(account=TD_ACCOUNT,
+                               order_id = resp['order_id'])['remainingQuantity'] != 0:
         sleep(1)
     
-    execPrice = TDSession.get_orders(account=TD_ACCOUNT, order_id = resp['order_id'])["orderActivityCollection"][0]["executionLegs"][0]["price"]
+    execPrice = TDSession.get_orders(account=TD_ACCOUNT,
+                                     order_id = resp['order_id'])
+    execPrice = execPrice["orderActivityCollection"][0]["executionLegs"][0]["price"]
     
     return execPrice
 
@@ -309,7 +203,7 @@ def rebalance(TDSession: TDClient, numShares: dict) -> dict:
     """
     execPrice = {}
     for symbol, quantity in numShares.items():
-        if(quantity == 0):
+        if(int(quantity) == 0):
             continue
         price = placeTrade(TDSession, symbol, quantity)
         execPrice[symbol] = price
@@ -349,23 +243,27 @@ def logTrades(TDSession: TDClient, book: PositionTracker, quantity: dict, price:
     
     book.addColumns()
     
-    data = {'Date': today, 'Cash': cash, 'Value': strategyValue}
-    for column in book.tracker.columns:
-        if(column not in list(positionValues.keys()) + ['Date', 'Cash', 'Value']):
-            data[column] = 0
-            continue
-        
-        if(column in ['Date', 'Cash', 'Value']):
-            continue
-        
-        data[column] = positionValues[column]
+    mult = book.getMarketMultiplier()
+    benchmarkValue = grabber.getLastPrice(MARKET_INDEX) * mult
     
-    book.addDay(data)
+    value = {'Date': today, 'Cash': cash, 'Value': strategyValue, 'Benchmark': benchmarkValue}
+    positions = {'Date': today, 'Cash': cash, 'Value': strategyValue, 'Benchmark': mult}
+    for column in book.tracker.columns:
+        if(column not in list(positionValues.keys()) + ['Date', 'Cash', 'Value', 'Benchmark']):
+            value[column] = 0
+            positions[column] = 0
+            continue
+        
+        if(column in ['Date', 'Cash', 'Value', 'Benchmark']):
+            continue
+        
+        value[column] = positionValues[column]
+        positions[column] = current[column]
+    
+    book.addDay(value, positions)
     return
 
 if __name__ == "__main__":
-    from communicate import marketClosed, publish # prevents circular import
-    
     TDSession = authenticateAPI()
     checkMarket(TDSession)
     rr, portfolio, assets = getAssets(TDSession)

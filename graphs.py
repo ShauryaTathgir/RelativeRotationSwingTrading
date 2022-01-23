@@ -99,8 +99,10 @@ def plotPortfolio(tracker: pd.DataFrame) -> None:
     Args:
         tracker (pd.DataFrame): Portfolio holdings over time
     """
-    plot = tracker.plot(x = 'Date', rot = 90)
-    fig = plot.get_figure()
+    fig = plt.figure(dpi = 600)
     fig.patch.set_facecolor('white')
-    fig.savefig(PORT_PLOT_NAME)
+    plot = tracker.plot(x = 'Date', rot = 90, ax=plt.gca())
+    plt.legend(bbox_to_anchor=(1, 1))
+    fig = plot.get_figure()
+    fig.savefig(PORT_PLOT_NAME, bbox_inches='tight')
     return

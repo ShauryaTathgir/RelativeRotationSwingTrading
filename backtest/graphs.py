@@ -47,7 +47,7 @@ def plotRRG(rr: List[RelativeRotation], period: int = 15, padding: int = 0.5) ->
         low = min(data)
         high = max(data)
         dist = int(max(abs(low - 100), abs(high - 100)) + padding) + 1
-    
+    fig.patch.set_facecolor('white')
     ax.axhline(100, color = 'k')
     ax.axvline(100, color = 'k')
     ax.legend()
@@ -98,7 +98,10 @@ def plotPortfolio(tracker: pd.DataFrame, location: str) -> None:
     Args:
         tracker (pd.DataFrame): Portfolio holdings over time
     """
-    plot = tracker.plot(x = 'Date', rot = 90)
+    fig = plt.figure(dpi = 600)
+    fig.patch.set_facecolor('white')
+    plot = tracker.plot(x = 'Date', rot = 90, ax=plt.gca())
+    plt.legend(bbox_to_anchor=(1, 1))
     fig = plot.get_figure()
-    fig.savefig(location + PORT_PLOT_NAME)
+    fig.savefig(location + PORT_PLOT_NAME, bbox_inches='tight')
     return

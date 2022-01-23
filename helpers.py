@@ -16,13 +16,17 @@
 
 # Owner can be contacted via email: Shaurya [at] Tathgir [dot] com
 
+from collections import Counter as check
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 import pandas as pd
+import quandl
 from multipledispatch import dispatch
 from numpy import mean, nan, std
 from td.client import TDClient
 
+from aws import s3Download, s3Upload
 from config import *
 
 
@@ -35,9 +39,9 @@ class Asset:
     momentum: float
     prices: pd.Series
     lastPrice: float
-    avgRet: float
-    quadrant: int
-    weight: float
+    avgRet: float = None
+    quadrant: int = None
+    weight: float = None
     
     def __post_init__(self) -> None:
         """Sets calculated values
@@ -49,18 +53,7 @@ class Asset:
     def _setRet(self) -> None:
         """Calculates average annual return for the asset
         """
-        years = []
-        for i in range(0, len(self.prices), 252):
-            try:
-                years.append(self.prices[i:i+252].tolist())
-            except KeyError:
-                years.append(self.prices[i:len(self.prices)].tolist())
-        
-        rets = []
-        for y in years:
-            rets.append(y[-1]/y[0] - 1)
-
-        self.avgRet = mean(rets)
+        self.avgRet = (self.prices[len(self.prices) - 1] / self.prices[1]) ** (365 / len(self.prices)) - 1
         return
     
     def _setQuadrant(self) -> None:
@@ -110,10 +103,7 @@ class RelativeRotation:
                       relativeStrength = self.relativeStrength[self.relativeStrength.index[-1]],
                       momentum = self.momentum[self.momentum.index[-1]],
                       prices = self.prices,
-                      lastPrice = self.prices[self.prices.index[-1]],
-                      avgRet = None,
-                      quadrant = None,
-                      weight = None)
+                      lastPrice = self.prices[self.prices.index[-1]])
         return asset
 
     def normalize(self, data: pd.Series) -> pd.Series:
@@ -273,3 +263,183 @@ class SetupRR(Data):
             list: List of RelativeRotation objects
         """
         return self.rr
+
+class PositionTracker:
+    def __init__(self, TDSession: TDClient) -> None:
+        """Tracks trades and allocations by asset
+
+        Args:
+            TDSession (TDClient): Authenticated API connection object
+        """
+        existing = self._getCSVs()
+        
+        if not existing: self._generateDataFrames()
+        
+        self.TDSession = TDSession
+        self.grabber = Data(self.TDSession)
+        return
+
+    def _generateDataFrames(self) -> None:
+        """Creates tracking dataframes if there have been no trades ever
+        """
+        mult = ACCOUNT_START / self.grabber.getLastPrice(MARKET_INDEX)
+        
+        self.tracker = pd.DataFrame(columns=['Date', 'Cash', 'Value', 'Benchmark'])
+        self.positions = pd.DataFrame(columns=['Date', 'Cash', 'Value', 'Benchmark'])
+        
+        yesterday = datetime.now() - timedelta(days=1)
+        valData = {'Date': yesterday.strftime("%Y/%m/%d"), 'Cash': ACCOUNT_START, 'Value': ACCOUNT_START, 'Benchmark': ACCOUNT_START}
+        posData = {'Date': yesterday.strftime("%Y/%m/%d"), 'Cash': ACCOUNT_START, 'Value': ACCOUNT_START, 'Benchmark': mult}
+        self.addDay(valData, posData)
+        
+        self.trades = pd.DataFrame(columns = ['Date', 'Symbol', 'Quantity', 'Value'])
+        return
+    
+    def _getCSVs(self) -> bool:
+        """Downloads tracker and trades csv from s3
+
+        Returns:
+            bool: If all files exist in s3
+        """
+        self.tracker = s3Download(TRACKER)
+        self.trades = s3Download(TRADES)
+        self.positions = s3Download(POSITIONS)
+        
+        return type(None) not in [type(self.tracker), type(self.trades), type(self.positions)]
+
+    def getStrategyValue(self) -> float:
+        """Gets current value of the portfolio
+
+        Returns:
+            float: Value in dollars
+        """
+        strategy = 0
+        for index, value in self.positions.iloc[self.positions.shape[0]-1].iteritems():
+            if(index in ['Date', 'Value', 'Benchmark']): continue
+            if(index == 'Cash'):
+                strategy += value
+                continue
+            strategy += value * self.grabber.getLastPrice(index)
+            
+        return strategy
+    
+    def getPreviousCashBalance(self) -> float:
+        """Gets cash balance from last period
+
+        Returns:
+            float: Cash in dollars
+        """
+        return self.tracker.iloc[self.tracker.shape[0] - 1, 1]
+    
+    def getMarketMultiplier(self) -> float:
+        """Gets the multiplier to convert market index into comparable
+            comparison based on portfolio value
+
+        Returns:
+            float: Multiplier
+        """
+        return self.tracker.iloc[self.tracker.shape[0] - 1, self.tracker.shape[1] - 1]
+    
+    def addSymbol(self, symbol: str) -> None:
+        """Adds an asset to the tracker. Assumed no allocation in past
+
+        Args:
+            symbol (str): Ticker for asset
+        """
+        self.tracker.insert(2, symbol, [0] * self.tracker.shape[0])
+        self.positions.insert(2, symbol, [0] * self.positions.shape[0])
+        return
+    
+    def addColumns(self) -> None:
+        """Adds assets in already in storage to allocation tracker
+        """
+        grabber = Data(self.TDSession)
+        symbols = grabber.getTickers()['tickers']
+        
+        newSymbols = [x for x in symbols if x not in self.tracker.columns]
+        
+        for sym in newSymbols:
+            self.addSymbol(sym)
+        
+        return
+    
+    def addDay(self, values: dict, positions: dict) -> None:
+        """Adds new periods allocations to tracker
+
+        Args:
+            values (dict): Allocations in dollars
+            positions (dict): Allocations in shares
+
+        Raises:
+            ValueError: If given incorrect keys in data dict
+        """
+        if(check(values.keys()) != check(self.tracker.columns)):
+            removedAssets = [x for x in self.tracker.columns if x not in values.keys()]
+            for asset in removedAssets:
+                values[asset] = 0
+                positions[asset] = 0
+            if(check(values.keys()) != check(self.tracker.columns)):
+                raise ValueError("Incorrect data keys")
+        
+        self.tracker = self.tracker.append(values, ignore_index=True)
+        self.positions = self.positions.append(positions, ignore_index=True)
+        return
+    
+    def changeAllocation(self, amount: float) -> None:
+        """Changes the amount of money that the strategy can use. Note that if allocation is decreased
+            the algorithm would have to rebalance to free up the cash.
+
+        Args:
+            amount (float): Dollar amount to change allocation by. Positive to add, negative to remove
+        """
+        cash = self.getPreviousCashBalance() + amount
+        currentStratValue = self.getStrategyValue()
+        value = currentStratValue + amount
+        mult = self.getMarketMultiplier() * (value / currentStratValue)
+        
+        self.tracker.iloc[self.tracker.shape[0] - 1, 1] = cash
+        self.positions.iloc[self.positions.shape[0] - 1, 1] = cash
+        
+        self.tracker.iloc[self.tracker.shape[0] - 1, self.tracker.shape[1] - 2] = value
+        self.positions.iloc[self.positions.shape[0] - 1, self.positions.shape[1] - 2] = value
+        
+        self.positions.iloc[self.positions.shape[0] - 1, self.positions.shape[1] - 1] = mult
+        return
+    
+    def logTrade(self, data: dict) -> None:
+        """Logs a trade in trades
+
+        Args:
+            data (dict): Trade data
+
+        Raises:
+            ValueError: If given incorrect data keys
+        """
+        if(check(data.keys()) != check(self.trades.columns)):
+            raise ValueError("Incorrect data keys")
+        
+        self.trades = self.trades.append(data, ignore_index=True)
+        return
+    
+    def saveLogs(self, location: str = '') -> None:
+        """Uploads final files to s3 for storage
+        
+        Args:
+            location (str): Pre-path to file
+        """
+        self.tracker.to_csv(location + TRACKER, index=False)
+        self.trades.to_csv(location + TRADES, index=False)
+        self.positions.to_csv(location + POSITIONS, index=False)
+        s3Upload(location + TRACKER)
+        s3Upload(location + TRADES)
+        s3Upload(location + POSITIONS)
+        return
+
+def getRiskFreeRate() -> float:
+    """Gets risk free rate from zero coupon bond yield curve
+
+    Returns:
+        float: Risk free rate
+    """
+    rates = quandl.get("FED/SVENY", authtoken=NQ_API_KEY)
+    return rates.iloc[rates.shape[0] - 1]["SVENY01"] / 100

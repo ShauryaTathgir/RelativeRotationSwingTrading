@@ -18,9 +18,11 @@
 
 from typing import List, Tuple
 
+import pandas as pd
 import numpy as np
 
-from helpers import Asset
+from config import NUM_PORTFOLIOS
+from helpers import Asset, getRiskFreeRate
 
 
 class EfficientFrontier:
@@ -37,35 +39,52 @@ class EfficientFrontier:
             data = []
             for asset in self.assets:
                 data.append(asset.prices.tolist())
+                
             
             data = np.array(data)
             self.covMat = np.cov(data)
+            self.covMat = self.covMat * 252
             self.invSigma = np.linalg.inv(self.covMat)
             self.one = np.ones(len(self.assets))
         return
     
-    def portfolioMean(self) -> float:
+    def portfolioMean(self, weights: np.ndarray = None) -> float:
         """Mean of portfolio given weights
+        
+        Args:
+            weights (np.ndarray): Weights of porfolio.
+                                    defaults to current weights
 
         Returns:
             float: Portfolio mean
         """
         mu_p = 0
-        for asset in self.assets:
-            mu_p += asset.weight * asset.avgRet
+        
+        if(weights is None):
+            for asset in self.assets:
+                mu_p += asset.weight * asset.avgRet
+        else:
+            for i in range(len(self.assets)):
+                mu_p += self.assets[i].avgRet * weights[i]
         
         return mu_p
     
-    def portfolioVariance(self) -> np.ndarray:
+    def portfolioVariance(self, weights: np.ndarray = None) -> np.ndarray:
         """Variance of portfolio
+        
+        Args:
+            weights (np.ndarray, Optional): Asset weights. Defaults to assigned values
 
         Returns:
             np.ndarray: Portfolio variance
         """
-        omega = []
-        for asset in self.assets:
-            omega.append(asset.weight)
-        omega = np.array(omega)
+        if(weights is None):
+            omega = []
+            for asset in self.assets:
+                omega.append(asset.weight)
+            omega = np.array(omega)
+        else:
+            omega = weights
         
         return np.matmul(np.matmul(omega.T, self.covMat), omega)
     
@@ -99,7 +118,17 @@ class EfficientFrontier:
             self.assets[0].weight = 1
             return True, np.array([1])
         return False, None
-            
+    
+    def getSharpeRatio(self, weights: np.ndarray = None) -> float:
+        """Calculates the Sharpe ratio
+
+        Args:
+            weights (np.ndarray, optional): Asset weights. Defaults to current assigned values.
+
+        Returns:
+            float: Sharpe ratio
+        """
+        return (self.portfolioMean(weights) - getRiskFreeRate()) / self.portfolioVariance(weights)     
     
     def globalMinimumVarianceWeights(self) -> np.ndarray:
         """Finds the long short global minimum variance portfolio using Markowitz portfolio theory
@@ -113,22 +142,37 @@ class EfficientFrontier:
         omega = np.matmul(self.invSigma, self.one)
         omega = omega / self._optimizedDenominator()
         
-        ############################################
-        #                                          #
-        # Temporary workaround to make long only   #
-        # not to be actually used                  #
-        # it wouldn't actually make any sense      #
-        #                                          #
-        ############################################
-        
-        for i in range(len(omega)):
-            if(omega[i]) < 0: omega[i] = 0
-        
-        omega /= sum(omega)
-        
         self._assignWeights(omega)
         
         return omega
+    
+    def optimizeSharpeRatio(self) -> np.ndarray:
+        """Finds the long only portfolio allocation with the highest Sharpe ratio
+
+        Returns:
+            np.ndarray: Asset weights
+        """
+        insuff, weights = self._checkInsuffAssets()
+        if(insuff): return weights
+        
+        rfr = getRiskFreeRate()
+        
+        results = pd.DataFrame(columns=['Allocation', 'Variance', 'Return', 'Sharpe'])
+
+        for _ in range(NUM_PORTFOLIOS):
+            weights = np.random.random(self.n)
+            weights /= np.sum(weights)
+            ret = self.portfolioMean(weights)
+            var = self.portfolioVariance(weights)
+            shrp = (ret - rfr) / var
+            results = results.append({'Allocation': str(weights), 'Variance': var, 'Return': ret, 'Sharpe': shrp}, ignore_index=True)
+        
+        i = results['Sharpe'].idxmax()
+        weights = results.iloc[i]['Allocation'].strip('[]').split()
+        weights = [float(i) for i in weights]
+        
+        self._assignWeights(weights)
+        return weights
     
     def _getMu(self) -> np.ndarray:
         """Gets average returns of assets

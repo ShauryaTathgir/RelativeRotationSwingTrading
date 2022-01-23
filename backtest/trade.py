@@ -16,142 +16,19 @@
 
 # Owner can be contacted via email: Shaurya [at] Tathgir [dot] com
 
-from collections import Counter as check
 # from sys import exit
 # from time import sleep
-from types import NoneType
 from typing import List, Tuple
 from warnings import filterwarnings
 
-import pandas as pd
 from td.client import TDClient
 
-from aws import s3Download, s3Upload
 # from communicate import marketClosed
 from config import *
-from Markowitz import EfficientFrontier
 from helpers import *
+from Markowitz import EfficientFrontier
 
 filterwarnings("ignore", category=RuntimeWarning)
-
-
-class PositionTracker:
-    def __init__(self, TDSession: TDClient, day: int, location: str = '') -> None:
-        """Tracks trades and allocations by asset
-
-        Args:
-            TDSession (TDClient): Authenticated API connection object
-            location (str): Directory to save files
-        """
-        existing = self._getCSVs(location)
-        
-        if not existing: self._generateDataFrames(day)
-        
-        self.TDSession = TDSession
-        return
-
-    def _generateDataFrames(self, day: int) -> None:
-        """Creates tracking dataframes if there have been no trades ever
-        """
-        self.tracker = pd.DataFrame(columns=['Date', 'Cash', 'Value'])
-        yesterday = day - 1
-        self.addDay({'Date': yesterday, 'Cash': ACCOUNT_START, 'Value': ACCOUNT_START})
-        self.trades = pd.DataFrame(columns = ['Date', 'Symbol', 'Quantity', 'Value'])
-        return
-    
-    def _getCSVs(self, location: str) -> bool:
-        """Downloads tracker and trades csv from s3
-
-        Args:
-            location(str): folder to locate files
-        
-        Returns:
-            bool: If files exist in s3
-        """
-        self.tracker = s3Download(location + TRACKER)
-        self.trades = s3Download(location + TRADES)
-        
-        return type(None) not in [type(self.tracker), type(self.trades)]
-
-    def getStrategyValue(self) -> float:
-        """Gets current value of the portfolio
-
-        Returns:
-            float: Value in dollars
-        """
-        return self.tracker.iloc[self.tracker.shape[0] - 1, self.tracker.shape[1] - 1]
-    
-    def getPreviousCashBalance(self) -> float:
-        """Gets cash balance from last period
-
-        Returns:
-            float: Cash in dollars
-        """
-        return self.tracker.iloc[self.tracker.shape[0] - 1, 1]
-    
-    def addSymbol(self, symbol: str) -> None:
-        """Adds an asset to the tracker;. Assumed no allocation in past
-
-        Args:
-            symbol (str): Ticker for asset
-        """
-        self.tracker.insert(2, symbol, [0] * self.tracker.shape[0])
-        return
-    
-    def addColumns(self) -> None:
-        """Adds assets in already in storage to allocation tracker
-        """
-        grabber = Data(self.TDSession)
-        symbols = grabber.getTickers()['tickers']
-        
-        newSymbols = [x for x in symbols if x not in self.tracker.columns]
-        
-        for sym in newSymbols:
-            self.addSymbol(sym)
-        
-        return
-    
-    def addDay(self, data: dict) -> None:
-        """Adds new periods allocations to tracker
-
-        Args:
-            data (dict): Allocations
-
-        Raises:
-            ValueError: If given incorrect keys in data dict
-        """
-        if(check(data.keys()) != check(self.tracker.columns)):
-            raise ValueError("Incorrect data keys")
-        
-        self.tracker = self.tracker.append(data, ignore_index=True)
-        return
-    
-    def logTrade(self, data: dict) -> None:
-        """Logs a trade in trades
-
-        Args:
-            data (dict): Trade data
-
-        Raises:
-            ValueError: If given incorrect data
-        """
-        if(check(data.keys()) != check(self.trades.columns)):
-            raise ValueError("Incorrect data keys")
-        
-        self.trades = self.trades.append(data, ignore_index=True)
-        return
-    
-    def saveLogs(self, location: str = '') -> None:
-        """Uploads final files to s3 for storage
-        
-        Args:
-            location (str): Pre-path to file
-        """
-        self.tracker.to_csv(location + TRACKER, index=False)
-        self.trades.to_csv(location + TRADES, index=False)
-        s3Upload(location + TRACKER)
-        s3Upload(location + TRADES)
-        return
 
 
 def authenticateAPI() -> TDClient:
@@ -204,7 +81,10 @@ def optimizeWeights(portfolio: List[Asset], assets: List[Asset]) -> List[Asset]:
         List[Asset]: All assets with weights assigned in parameter
     """
     optimizer = EfficientFrontier(portfolio)
-    optimizer.globalMinimumVarianceWeights()
+    match OPT_METHOD:
+        case 'Sharpe': optimizer.optimizeSharpeRatio()
+        case 'GlobalMinimumVariance': optimizer.globalMinimumVarianceWeights()
+    #   case 'RiskTolerance': optimizer.optimalPortfolioWeights(gamma)
     portAssets = optimizer.assets
 
     excluded = [x for x in assets if x not in portfolio]
@@ -319,7 +199,7 @@ def rebalance(TDSession: TDClient, numShares: dict, assets: List[Asset]) -> dict
     """
     execPrice = {}
     for symbol, quantity in numShares.items():
-        if(quantity == 0):
+        if(int(quantity) == 0):
             continue
         price = placeTrade(TDSession, symbol, quantity, assets)
         execPrice[symbol] = price
@@ -361,16 +241,22 @@ def logTrades(TDSession: TDClient, book: PositionTracker, quantity: dict, price:
     
     book.addColumns()
     
-    data = {'Date': today, 'Cash': cash, 'Value': strategyValue}
-    for column in book.tracker.columns:
-        if(column not in list(positionValues.keys()) + ['Date', 'Cash', 'Value']):
-            data[column] = 0
-            continue
-        
-        if(column in ['Date', 'Cash', 'Value']):
-            continue
-        
-        data[column] = positionValues[column]
+    mult = book.getMarketMultiplier()
+    benchmarkValue = assets[0].market[assets[0].market.index[-1]] * mult
     
-    book.addDay(data)
+    value = {'Date': today, 'Cash': cash, 'Value': strategyValue, 'Benchmark': benchmarkValue}
+    positions = {'Date': today, 'Cash': cash, 'Value': strategyValue, 'Benchmark': mult}
+    for column in book.tracker.columns:
+        if(column not in list(positionValues.keys()) + ['Date', 'Cash', 'Value', 'Benchmark']):
+            value[column] = 0
+            positions[column] = 0
+            continue
+        
+        if(column in ['Date', 'Cash', 'Value', 'Benchmark']):
+            continue
+        
+        value[column] = positionValues[column]
+        positions[column] = current[column]
+    
+    book.addDay(value, positions)
     return
