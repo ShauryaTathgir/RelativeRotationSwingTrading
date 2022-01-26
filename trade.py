@@ -108,7 +108,10 @@ def getCurrentPositions(TDSession: TDClient, book: PositionTracker) -> dict:
     """
     grabber = Data(TDSession)
     tickers = grabber.getTickers()['tickers']
-    tickers += book.positions.columns
+    positions = list(book.positions.columns)
+    for i in tickers + ['Date', 'Cash', 'Value', 'Benchmark']:
+        if(i in positions): positions.remove(i)
+    tickers += positions
     
     holdings = TDSession.get_accounts(account = TD_ACCOUNT,
                                       fields=['positions'])['securitiesAccount']['positions']
@@ -143,6 +146,10 @@ def calculatePositions(TDSession: TDClient, book: PositionTracker, assets: List[
     for position in assets:
         targetPositions[position.ticker] = int(strategyValue * position.weight / position.lastPrice)
         deltaPositions[position.ticker] = targetPositions[position.ticker] - current[position.ticker]
+    
+    for oldTicker, currentPos in current.items():
+        if(oldTicker not in deltaPositions.keys()):
+            deltaPositions[oldTicker] = -1 * currentPos
 
     return deltaPositions
 
