@@ -86,8 +86,8 @@ def publish(book, location: str = '') -> None:
     # todayTrades = book.trades.loc[book.trades['Date'] == datetime.now().strftime("%Y/%m/%d")]
     # sendTrades(todayTrades)
     
-    plotPie(book.tracker, location)
-    sendChart(location + PIE_NAME)
+    # plotPie(book.tracker, location)
+    # sendChart(location + PIE_NAME)
     
     plotPortfolio(book.tracker, location)
     sendChart(location + PORT_PLOT_NAME)

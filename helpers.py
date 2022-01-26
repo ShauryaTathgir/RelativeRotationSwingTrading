@@ -271,12 +271,12 @@ class PositionTracker:
         Args:
             TDSession (TDClient): Authenticated API connection object
         """
+        self.TDSession = TDSession
+        self.grabber = Data(self.TDSession)
+        
         existing = self._getCSVs()
         
         if not existing: self._generateDataFrames()
-        
-        self.TDSession = TDSession
-        self.grabber = Data(self.TDSession)
         return
 
     def _generateDataFrames(self) -> None:
@@ -338,7 +338,7 @@ class PositionTracker:
         Returns:
             float: Multiplier
         """
-        return self.tracker.iloc[self.tracker.shape[0] - 1, self.tracker.shape[1] - 1]
+        return self.positions.iloc[self.positions.shape[0] - 1, self.positions.shape[1] - 1]
     
     def addSymbol(self, symbol: str) -> None:
         """Adds an asset to the tracker. Assumed no allocation in past

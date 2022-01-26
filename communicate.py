@@ -56,7 +56,7 @@ def sendChart(img: str) -> None:
         img (str): File name
     """
     s3Upload(img)
-    sms('/'.join(S3_BUCKET, img))
+    sms('/'.join([S3_BUCKET, img]))
     return
 
 def summary(alpha: float, beta: float, sharpe: float, plTD: float, percentReturn: float) -> None:

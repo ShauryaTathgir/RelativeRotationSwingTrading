@@ -1,5 +1,3 @@
-# This is still in development.
-
 # Relative Rotation Swing Trading Algorithm
 ## Theory
 Relative Rotation Graphs, or RRGs, are a concept initially developed by Julius de Kempenaer that plots a sector's relative momentum against its relative strength. Relative strength is fundamentally how well a sector is performing compared to the market, and the relative momentum is based on the percent change of the relative strength. Once these values are calculated they can be plotted on a relative rotation graph as so:<br>
@@ -20,13 +18,13 @@ This algorithm is based on JdK's sector rotation strategy, but was created to be
 * **Market Risk**: While one of the goals of this strategy is to limit drawdowns, it is currently implemented with assets and optimizations to almost always have a positive beta. Therefore, in the event of a market correction, this strategy will still suffer losses and will not adjust to a bear market.
 * **Tax Inefficiency**: Due to the daily rebalancing, it is very likely that assets will not be held for over a year to be considered long term capital gains to be taxed at a lower rate.
 * **Operational Risk**: I am not a software developer. As a result, there may be errors in the code or edge cases I failed to consider that result in trades that do not follow the strategy and expose me to risks that I am not aware of.
-* **Running Costs**: Running costs for this algorithm in AWS on a t4g.micro after enrollment in a Compute Saving Plan are around $5/month. This does not include the costs of utilizing Amazon SNS for notifications and S3 storage for image distribution. Assuming a strategy allocation of $10,000 annual costs would be 60 bps. This also does not include the management fees for ETFs that may be held in the portfolio.
-* **Lack of awareness**:The only input that this strategy uses are the daily closing prices for the relevant assets. The strategy does not take any broader set of information into account when making trades.<br><br>
+* **Running Costs**: Running costs for this algorithm in AWS on a t3a.micro after enrollment in a Compute Saving Plan are around $5/month. This does not include the costs of utilizing Amazon SNS for notifications and S3 storage for image distribution. Assuming a strategy allocation of $10,000 annual costs would be 60 bps. This also does not include the management fees for ETFs that may be held in the portfolio.
+* **Lack of awareness**: The only input that this strategy uses are the daily closing prices for the relevant assets. The strategy does not take any broader set of information into account when making trades.<br><br>
 
 ## Backtesting
 Detailed backtesting data can be found in the backtesting file. The folder number corresponds to the quadrants included if that number was in binary. So, 1 is [0, 0, 0, 1] and 5 is [0, 1, 0, 1], etc.<br>
 This is a plot over the last ~9 years with the following SPDR Sector ETFs in consideration: 'XLY', 'XLP', 'XLE', 'XLF', 'XLV', 'XLI', 'XLB', 'XLK', and 'XLU'. These were selected because they had a long price history and for no other reason. The benchmark is the S&P 500 index and the included assets are only in quadrant 4.<br>
-![Backtest](rrg.tathgir.com/example-backtest.png)<br>
+![Backtest](http://rrg.tathgir.com/example-backtest-new.png)<br>
 This backtest assumed a starting allocation of $10,000 with an additional annual investment of $1,000. We can see that the alogrithm strongly outperformed the market post COVID while having inconsistent alpha in prior years. Most of the lack of performance is due to not including all sectors in the algorithm, so when sectors outside of the 9 included sectors were pulling up the market, the algorithm was instead sitting on cash. The strong performance post COVID is due to the algorithm's preference for higher volatility markets. When sector prices diverge by a larger margin and in a short time frame, the algorithm can capitalize on this by only weighting the leading sectors to generate alpha since the market was being weighed down by other sectors. If all sectors are performing relatively the same (which they typically do due to their very high correlation), the algorithm fails to generate a distictive advantage.<br>
 Learning from this backtest, we can see that the choice of chosen assets are extremely import for asset importance. An ideal possible asset list would include assets from all sectors with minimal correlations and relatively high variances.<br>
 

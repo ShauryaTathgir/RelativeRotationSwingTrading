@@ -96,17 +96,19 @@ def optimizeWeights(portfolio: List[Asset], assets: List[Asset]) -> List[Asset]:
 
     return portAssets + excluded
 
-def getCurrentPositions(TDSession: TDClient) -> dict:
+def getCurrentPositions(TDSession: TDClient, book: PositionTracker) -> dict:
     """Gets current quantities for shares within the portfolio
 
     Args:
         TDSession (TDClient): API object
+        book (PositionTracker): Tracking object
 
     Returns:
         dict: Symbol: quantity
     """
     grabber = Data(TDSession)
     tickers = grabber.getTickers()['tickers']
+    tickers += book.positions.columns
     
     holdings = TDSession.get_accounts(account = TD_ACCOUNT,
                                       fields=['positions'])['securitiesAccount']['positions']
@@ -132,7 +134,7 @@ def calculatePositions(TDSession: TDClient, book: PositionTracker, assets: List[
     Returns:
         dict: Symbol: trade quantity
     """
-    current = getCurrentPositions(TDSession)
+    current = getCurrentPositions(TDSession, book)
     
     targetPositions = {}
     deltaPositions = {}
@@ -230,7 +232,7 @@ def logTrades(TDSession: TDClient, book: PositionTracker, quantity: dict, price:
         data = {'Date': today, 'Symbol': symbol, 'Quantity': shares, "Value": value}
         book.logTrade(data)
     
-    current = getCurrentPositions(TDSession)
+    current = getCurrentPositions(TDSession, book)
     cash = book.getPreviousCashBalance() + deltaCash
     
     grabber = Data(TDSession)

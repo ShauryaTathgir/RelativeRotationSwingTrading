@@ -101,7 +101,19 @@ def mem():
     if(memory > (1/3)): print('RAM use exceeded value, currently at ' + str(memory) + ' GB.')
     return
 
+"""
+This should be implemented so daily assets are only created once and the quadrants loop
+    is run within that. Basically, the nested loops should be inverted. Inside loop should be outside
+    and outside loop should be inside.
+    
+This should cut down backtesting run time significantly.
 
+Additionally, the days of the backtest should be automatically generated so that the asset list
+    in consideration can be easily changed without having to worry about the length of price history data.
+
+I'll implement these at some point, currently not worth the effort as running this backtest "only" takes 4 to 5 days
+    and there are other things I should be doing instead.
+"""
 if __name__ == "__main__":
     TDSession = authenticateAPI()
     setup = SetupRR(TDSession)
@@ -135,5 +147,5 @@ if __name__ == "__main__":
         mem()
 
     print(profit)
-    print(intToBinary(max(profit, key = profit.get)))
+    print(max(profit, key = profit.get))
     mem()

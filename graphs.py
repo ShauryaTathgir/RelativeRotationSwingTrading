@@ -80,11 +80,14 @@ def plotPie(tracker: pd.DataFrame) -> None:
     Args:
         tracker (pd.DataFrame): Current holdings values
     """
-    labels = tracker.columns[1:-1]
+    labels = tracker.columns[1:-2]
     values = tracker.iloc[tracker.shape[0] - 1]
     sizes = []
     for i in values.index:
-        if(i in ['Date', 'Value']): continue
+        if(i in ['Date', 'Value', 'Benchmark']): continue
+        if(values[i] < 0):
+            sizes.append(0)
+            continue
         sizes.append(values[i] / values['Value'])
     fig, ax = plt.subplots(figsize=(10, 10))
     fig.patch.set_facecolor('white')

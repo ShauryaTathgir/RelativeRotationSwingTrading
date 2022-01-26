@@ -276,14 +276,12 @@ class PositionTracker:
             TDSession (TDClient): Authenticated API connection object
             location (str): Directory to save files
         """
-        self.assets = assets
-        existing = self._getCSVs(location)
-        
-        if not existing: self._generateDataFrames(day)
-        
         self.TDSession = TDSession
         self.grabber = Data(self.TDSession)
         
+        existing = self._getCSVs()
+        
+        if not existing: self._generateDataFrames()
         return
 
     def _generateDataFrames(self, day: int) -> None:
