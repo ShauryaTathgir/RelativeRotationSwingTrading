@@ -69,8 +69,12 @@ def getAssets(TDSession: TDClient) -> Tuple[List[RelativeRotation], List[Asset],
     setup = SetupRR(TDSession)
     rr = setup.getRR()
 
-    assets = [relRot.getAsset() for relRot in rr]
-    portfolio = [x for x in assets if QUADRANTS[x.quadrant - 1]]
+    if(setup.getLastPrice(VOL_INDEX) < VOL_CUTOFF):
+        quadrants = LV_QUADRANTS
+    else:
+        quadrants = HV_QUADRANTS
+    
+    portfolio = [x for x in assets if quadrants[x.quadrant - 1]]
     return rr, portfolio, assets
 
 def optimizeWeights(portfolio: List[Asset], assets: List[Asset]) -> List[Asset]:

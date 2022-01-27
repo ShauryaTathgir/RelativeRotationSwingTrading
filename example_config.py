@@ -16,9 +16,6 @@
 
 # Owner can be contacted via email: Shaurya [at] Tathgir [dot] com
 
-from config import NUM_PORTFOLIOS
-
-
 CONSUMER_KEY = None     # TD Consumer key
 REDIRECT_URL = None     # Local uri to redirect eg: 'http://localhost/test'
 CREDENTIALS_PATH = None # Path to td_state.json
@@ -38,7 +35,9 @@ POSITIONS = None        # Name of positions tracker csv file eg: 'positions.csv'
 BNCHMRK_MULT = None     # Place to save multiplier value
 
 ACCOUNT_START = None    # Cash available to the strategy
-QUADRANTS = None        # Which quadrants to include. list where index + 1 corresponds to the quadrant.
-                        #     1 or 0 value for True and False repectively. eg: [0, 0, 0, 1]
+LV_QUADRANTS = None     # Which quadrants to use when volatility is low
+HV_QUADRANTS = None     # Which quadrants to use when volatility is high
+VOL_INDEX = None        # What index to use to determine market volatility
+VOL_CUTOFF = None       # Cutoff to determine high or low vol
 OPT_METHOD = None       # Optimization method, check trade.optimizeWeights for options and Markowitz for documentation.
 NUM_PORTFOLIOS = None   # Number of random portfolios to generate when maximizing Sharpe ratio
