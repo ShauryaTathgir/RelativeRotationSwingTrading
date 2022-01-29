@@ -32,7 +32,6 @@ PORT_PLOT_NAME = None   # Name of portfolio plot file eg: 'portfolio.png'
 TRACKER = None          # Name of value tracker csv file eg: 'tracker.csv'
 TRADES = None           # Name of trade tracker csv file eg: 'trades.csv'
 POSITIONS = None        # Name of positions tracker csv file eg: 'positions.csv'
-BNCHMRK_MULT = None     # Place to save multiplier value
 
 ACCOUNT_START = None    # Cash available to the strategy
 LV_QUADRANTS = None     # Which quadrants to use when volatility is low
