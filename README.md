@@ -26,7 +26,7 @@ Detailed backtesting data can be found in the backtesting file. The folder numbe
 This is a plot over the last ~9 years with the following SPDR Sector ETFs in consideration: 'XLY', 'XLP', 'XLE', 'XLF', 'XLV', 'XLI', 'XLB', 'XLK', and 'XLU'. These were selected because they had a long price history and for no other reason. The benchmark is the S&P 500 index and the included assets are only in quadrant 4 when the VIX is above 18, and both quadrants 3 and 4 were included when the VIX was below 18.<br>
 ![Backtest](http://rrg.tathgir.com/example-backtest-vol.png)<br>
 This backtest assumed a starting allocation of $1,000 with an additional annual investment of $100. We can see that the alogrithm strongly outperformed the market post COVID while also generating some alpha in prior years. Some lack of performance is due to not including all sectors in the algorithm, so when sectors outside of the 9 included sectors were pulling up the market, the algorithm was instead sitting on cash. The strong performance post COVID is due to the algorithm's preference for higher volatility markets. When sector prices diverge by a larger margin and in a short time frame, the algorithm can capitalize on this by only weighting the leading sectors to generate alpha since the market was being weighed down by other sectors. If all sectors are performing relatively the same (which they typically do due to their very high correlation), the algorithm fails to generate a distictive advantage.<br>
-However, it is clear that changing the quadrants included based on market volatility is extremely effective at improving the performance of the overall algorithm. Including lagging and improving sectors performs better that only improving sectors in a stable bull market performs, but the opposite is true in unstable bull markets.<br>
+However, it is clear that changing the quadrants included based on market volatility is extremely effective at improving the performance of the overall algorithm. Including lagging and improving sectors performs better than only improving sectors in a stable bull market, but the opposite is true in unstable bull markets.<br>
 Learning from this backtest, we can see that the choice of chosen assets are extremely important for strategy performance. An ideal possible asset list would include assets from all sectors with minimal correlations and relatively high variances.<br>
 
 **Backtesting performance is not indicative of future results.**<br><br>
@@ -49,7 +49,7 @@ Learning from this backtest, we can see that the choice of chosen assets are ext
 4. Create an EC2 instance and create an SNS notification.
 5. Connect EC2 instance to an IAM role with full S3 access and SNS publishing access.
 6. Ensure account is margin or has at least triple additional cash balance not allocated to the strategy to reduce risk of good faith violations.
-7. Close any positions in assets included in the strategy or the algorithm may automatically do so.<br><br>
+7. Close any positions in assets included in the strategy or the algorithm may automatically do so and add its cash value to its allocation.<br><br>
 
 
 ## Tips
